@@ -1,0 +1,28 @@
+{
+  "name": "agent-social",
+  "version": "0.1.0",
+  "description": "Agent-first CLI + Skill for YouTube / X / Reddit. YouTube module: search, info, transcript, frames via youtubei.js.",
+  "type": "module",
+  "bin": {
+    "asocial": "./dist/asocial.js"
+  },
+  "scripts": {
+    "build": "tsup",
+    "typecheck": "tsc --noEmit",
+    "test": "bun test",
+    "check": "bun run typecheck && bun test"
+  },
+  "dependencies": {
+    "youtubei.js": "^18.1.0"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.1.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.7.0"
+  },
+  "engines": {
+    "node": ">=18.3.0",
+    "bun": ">=1.0.0"
+  },
+  "license": "MIT"
+}
