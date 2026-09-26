@@ -75,3 +75,128 @@ export type Err = {
   error: { code: string; message: string; hint?: string };
 };
 export type Envelope<T> = Ok<T> | Err;
+
+export type RedditPost = {
+  id: string;
+  subreddit: string | null;
+  title: string;
+  author: string | null;
+  score: number | null;
+  scoreText: string | null;
+  created: string | null;
+  relTime: string | null;
+  permalink: string;
+  url: string | null;
+  commentCount: number | null;
+  body: string | null;
+  nsfw: boolean;
+  spoiler: boolean;
+  stickied: boolean;
+};
+
+export type RedditComment = {
+  id: string;
+  author: string | null;
+  score: number | null;
+  scoreText: string | null;
+  created: string | null;
+  relTime: string | null;
+  body: string;
+  permalink: string | null;
+  replies: RedditComment[];
+  moreCount: number | null;
+};
+
+export type RedditThread = {
+  post: RedditPost;
+  comments: RedditComment[];
+  truncated: boolean;
+};
+
+export type RedditSearchResult =
+  | ({ kind: 'post' } & RedditPost)
+  | ({ kind: 'comment' } & RedditComment & { subreddit: string | null; linkTitle: string | null });
+
+export type RedditUser = {
+  name: string;
+  title: string | null;
+  description: string | null;
+  karma: number | null;
+  created: string | null;
+  posts: RedditPost[];
+  comments: Array<RedditComment & { subreddit: string | null; linkTitle: string | null }>;
+};
+
+export type XAuthor = {
+  id: string;
+  username: string;
+  displayname: string | null;
+  verified: boolean;
+  protected: boolean;
+  followersCount: number | null;
+  profileImageUrl: string | null;
+};
+
+export type XQuotedTweet = {
+  id: string;
+  url: string;
+  username: string | null;
+  text: string;
+};
+
+export type XTweet = {
+  source: 'x-cookie';
+  id: string;
+  url: string;
+  date: string | null;
+  text: string;
+  lang: string | null;
+  author: XAuthor | null;
+  replyCount: number | null;
+  retweetCount: number | null;
+  likeCount: number | null;
+  quoteCount: number | null;
+  viewCount: number | null;
+  conversationId: string | null;
+  inReplyToTweetId: string | null;
+  hashtags: string[];
+  mentionedUsers: string[];
+  links: string[];
+  photoCount: number;
+  videoCount: number;
+  quotedTweet: XQuotedTweet | null;
+};
+
+export type XUser = {
+  source: 'x-cookie';
+  id: string;
+  url: string;
+  username: string;
+  displayname: string | null;
+  description: string | null;
+  created: string | null;
+  followersCount: number | null;
+  friendsCount: number | null;
+  statusesCount: number | null;
+  location: string | null;
+  profileImageUrl: string | null;
+  protected: boolean;
+  verified: boolean;
+};
+
+export type XThread = {
+  root: XTweet;
+  replies: XTweet[];
+  truncated: boolean;
+};
+
+export type XProfile = {
+  user: XUser;
+  recentTweets: XTweet[];
+};
+
+export type XStatus = {
+  authenticated: boolean;
+  twscrapeVersion: string | null;
+  probe: { handle: string; id: string } | null;
+};

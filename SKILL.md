@@ -98,12 +98,30 @@ height } | { at, error }] }`. Visuals often lag narration — grab
 - `INVALID_INPUT` — empty query / unresolvable id-or-URL / bad flag. No network call.
 - `FETCH_FAILED` — YouTube request failed (unavailable/private video, API change, or
   datacenter-IP block). Hint tells you to update deps and retry from residential IP.
-- `MISSING_DEPENDENCY` — `frames` only: ffmpeg/yt-dlp not on PATH (install hint).
-- `NOT_IMPLEMENTED` — `x` / `r` modules (TODO). `UNKNOWN_COMMAND` — bad module/command.
+- `MISSING_DEPENDENCY` — `frames`: ffmpeg/yt-dlp not on PATH (install hint);
+  `x`: twscrape not on PATH (install hint). `UNKNOWN_COMMAND` — bad module/command.
 
-## X (TODO)
+## X — cookie-authenticated reads (needs twscrape + `.env`)
 
-X/Twitter module not built yet. `asocial x ...` returns `NOT_IMPLEMENTED` (exit 2).
+Backend: external `twscrape` binary (cookie session from `X_AUTH_TOKEN` /
+`X_CT0` in `.env`; ephemeral per-call session, nothing persisted). Every
+result carries `source: "x-cookie"`. READ-ONLY — no posting/likes/follows.
+`from:` / `since:` operators pass through to `search`.
+
+```
+asocial x search "<query>" [--limit N]     # default 20; client-capped (twscrape ignores small limits)
+asocial x thread <tweet-id|url> [--limit N]  # default 50 → { root, replies, truncated }
+asocial x profile <handle|url> [--limit N]   # default 20 → { user, recentTweets }
+asocial x status                             # lightweight auth probe (user_by_login @X)
+```
+
+- `INVALID_INPUT` — missing query/id/handle, bad `--limit`, or missing
+  `X_AUTH_TOKEN`/`X_CT0` (hint: set them in `.env`, never commit it).
+- `FETCH_FAILED` — network/auth failure; hint says to re-extract
+  auth_token/ct0 cookies and update `.env`. Dead cookies make twscrape
+  retry-hang — the CLI enforces a ~90s timeout and surfaces it as
+  `FETCH_FAILED` with the same hint.
+- `MISSING_DEPENDENCY` — `twscrape` not on PATH (`pip install twscrape`).
 
 ## Reddit (TODO)
 

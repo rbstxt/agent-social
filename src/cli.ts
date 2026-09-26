@@ -1,11 +1,13 @@
 /**
  * `asocial` — agent-first CLI for YouTube / X / Reddit.
  *
- * Only `yt` is implemented. `x` and `r` are routing placeholders until their
- * modules land (see SKILL.md).
+ * `yt` (YouTube), `x` (X via twscrape), and `r` (Reddit via local Redlib)
+ * are implemented (see SKILL.md).
  */
 import { createRequire } from 'node:module';
 import { err, toJson } from './output.ts';
+import { mainR, rUsage } from './r.ts';
+import { mainX, xUsage } from './x.ts';
 import { mainYt, ytUsage } from './yt.ts';
 
 export const MODULES = ['yt', 'x', 'r'] as const;
@@ -18,10 +20,14 @@ function topUsage(version: string): string {
     '',
     'Modules:',
     '  yt          YouTube: search | info | transcript | frames',
-    '  x           (TODO) X / Twitter module — not implemented yet',
-    '  r           (TODO) Reddit module — not implemented yet',
+    '  x           X / Twitter (twscrape): search | thread | profile | status',
+    '  r           Reddit (local Redlib): status | posts | thread | search | user',
     '',
     ytUsage(),
+    '',
+    xUsage(),
+    '',
+    rUsage(),
   ].join('\n');
 }
 
@@ -57,23 +63,13 @@ export async function run(
 
   if (mod === 'yt') return mainYt(rest, stdin);
 
-  if (mod === 'x' || mod === 'r') {
-    return {
-      stdout: toJson(
-        err(
-          mod,
-          'NOT_IMPLEMENTED',
-          `the '${mod}' module is not implemented yet (TODO — see SKILL.md)`,
-          'use `asocial yt ...` for YouTube',
-        ),
-      ),
-      exitCode: 2,
-    };
-  }
+  if (mod === 'r') return mainR(rest);
+
+  if (mod === 'x') return mainX(rest);
 
   return {
     stdout: toJson(
-      err('asocial', 'UNKNOWN_COMMAND', `unknown module: ${mod}`, 'modules: yt | x (TODO) | r (TODO)'),
+      err('asocial', 'UNKNOWN_COMMAND', `unknown module: ${mod}`, 'modules: yt | x | r'),
     ),
     exitCode: 2,
   };

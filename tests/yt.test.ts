@@ -103,12 +103,15 @@ describe('runYt validation (no network)', () => {
 });
 
 describe('top-level routing', () => {
-  test('x/r are TODO placeholders (exit 2)', async () => {
-    for (const mod of ['x', 'r']) {
-      const r = await run([mod, 'search', 'q']);
-      expect(r.exitCode).toBe(2);
-      expect(JSON.parse(r.stdout).error.code).toBe('NOT_IMPLEMENTED');
-    }
+  test('x routes to the X module (no network on bad input)', async () => {
+    const r = await run(['x', 'search', 'q', '--limit', '0']);
+    expect(r.exitCode).toBe(1);
+    expect(JSON.parse(r.stdout).error.code).toBe('INVALID_INPUT');
+  });
+  test('r routes to the reddit module (no network on bad input)', async () => {
+    const r = await run(['r', 'posts', 'x', '--sort', 'bogus']);
+    expect(r.exitCode).toBe(1);
+    expect(JSON.parse(r.stdout).error.code).toBe('INVALID_INPUT');
   });
   test('unknown module exit 2', async () => {
     const r = await run(['zzz']);
