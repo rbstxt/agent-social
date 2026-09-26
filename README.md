@@ -2,7 +2,7 @@
 
 Agent-first CLI + Skill for YouTube / X / Reddit.
 
-**YouTube module: built. X module: built (needs twscrape + `.env` cookies).** Reddit: see `r` docs below.
+**YouTube module: built. X module: built (needs twscrape + `.env` cookies). Reddit module: built (needs local Redlib, below).**
 
 Design credit: the YouTube module's envelope/funnel design is adapted from
 [Tamas Gabor's youtube-relay-mcp](https://github.com/gabros20/youtube-relay-mcp)
@@ -51,8 +51,37 @@ asocial x search "from:X" --limit 10      # X search (from:/since: pass through)
 asocial x thread <tweet-id|url> --limit 30
 asocial x profile <handle> --limit 10
 asocial x status                           # validate X cookies
-asocial r ...   # TODO — NOT_IMPLEMENTED
+asocial r status                           # ping local Redlib (reachability + version)
+asocial r posts cli --sort hot --limit 20  # subreddit listing (r/ prefix optional)
+asocial r thread <post-id|url> --limit 50 --max-chars 1500  # post + comment tree
+asocial r search "query" --sub NAME --limit 20              # Redlib; Arctic Shift fallback (source marked)
+asocial r user <name> --limit 20         # profile + recent posts/comments
 ```
+
+### Reddit backend: local Redlib (no Reddit credentials)
+
+Official Reddit OAuth is approval-gated, and public Redlib instances are
+unusable (rate-limited / JS-proof-walled), so `asocial r` talks to a
+**self-hosted** Redlib (AGPL-3.0, external service — our code stays MIT).
+No Docker needed on Apple Silicon; build from source (keep it outside the repo):
+
+```bash
+git clone https://github.com/redlib-org/redlib /tmp/redlib-build
+cd /tmp/redlib-build && cargo build --release   # boring-sys2 compiles BoringSSL — slow, allow ~2-10 min
+./target/release/redlib --address 127.0.0.1 --port 8182
+```
+
+Then point the CLI at it (default `http://127.0.0.1:8182`):
+
+```bash
+export REDLIB_URL=http://127.0.0.1:8182
+asocial r status    # → { reachable: true, version, baseUrl }
+```
+
+For persistence across reboots, the Redlib repo ships a macOS launchd
+reference (`contrib/redlib.plist`) — adapt its paths to your checkout and
+`launchctl load` it. When Redlib is down, `r` commands fail with
+`MISSING_DEPENDENCY` and the setup hint.
 
 See [SKILL.md](./SKILL.md) for the agent workflow (the funnel: cheap search →
 info shortlist → transcript peek → full read; frames pair with `startMs`).
@@ -78,6 +107,9 @@ src/
   x.ts              `x` arg parsing + dispatch (search|thread|profile|status)
   xnorm.ts          pure twscrape Tweet/User → envelope normalizers (no network)
   xengine.ts        twscrape CLI bridge: ephemeral cookie session, enforced timeouts
+  r.ts              `r` arg parsing + dispatch (status|posts|thread|search|user)
+  reddit.ts         Redlib engine + Arctic Shift search fallback (only fetcher)
+  reddit_parse.ts   pure Redlib HTML → data normalizers (no network)
   youtube.ts        youtubei.js engine (only module importing youtubei.js)
   ids.ts            video-id + channel-ref extraction, URL builders
   parse.ts          view-count + chapter normalizers
@@ -85,8 +117,9 @@ src/
   frame.ts          yt-dlp+ffmpeg extraction (only module shelling out)
   output.ts         JSON envelope helpers
   commands/         search|info|transcript|frames runners + x runners (x.ts)
-tests/              bun tests (fixtures, no network, no real tokens)
+tests/              bun tests (fixtures, no network, no real tokens; reddit fixtures are fictional)
 SKILL.md            shared agent skill (repo root)
+SMOKE-reddit.md     live Redlib smoke log (posts→thread→search→user)
 ```
 
 ## License

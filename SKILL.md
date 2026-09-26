@@ -123,6 +123,31 @@ asocial x status                             # lightweight auth probe (user_by_l
   `FETCH_FAILED` with the same hint.
 - `MISSING_DEPENDENCY` — `twscrape` not on PATH (`pip install twscrape`).
 
-## Reddit (TODO)
+## Reddit — zero-credential reads via self-hosted Redlib
 
-Reddit module not built yet. `asocial r ...` returns `NOT_IMPLEMENTED` (exit 2).
+Backend: your own Redlib instance (redlib-org/redlib, AGPL-3.0, used as an
+external local service over HTTP — no Reddit credentials, no vendored code).
+Redlib exposes **HTML only** (no `.json` routes — verified against its route
+table); the CLI scrapes its stable server-rendered templates. WRITE ops
+(posting/voting/DMs) are out of scope — read-only.
+
+```
+asocial r status                                        # ping Redlib → { reachable, version, baseUrl }
+asocial r posts <sub> [--sort hot|new|top|rising] [--limit N] [--time hour|day|week|month|year|all]
+asocial r thread <post-id|url> [--limit N] [--sort confidence|top|new|controversial|old] [--max-chars N]
+asocial r search "<query>" [--sub NAME] [--limit N]     # → { results, source: redlib|arctic_shift }
+asocial r user <name> [--limit N]                       # → profile + recent posts/comments
+```
+
+Funnel (protect context): `posts`/`search` shortlist → `thread --limit 20
+--max-chars 1500` peek → full `thread` on survivors. Comment trees are
+depth-capped (8) and `--limit` counts every nested reply.
+
+- `source` — `search` normally hits local Redlib; if Redlib fails it falls
+  back to the Arctic Shift API (multi-week lag, slow under load, needs
+  `--sub`) and marks `source: "arctic_shift"`.
+- Media `url`s may be Redlib-proxied relative paths (`/img/…`) — resolve
+  against `REDLIB_URL`.
+- `INVALID_INPUT` — bad sub/id/query/limit/sort/time. `FETCH_FAILED` —
+  reachable Redlib but the fetch failed (bad sub, rate-limit, upstream error).
+- `MISSING_DEPENDENCY` — Redlib down (hint prints the build/run one-liner).
