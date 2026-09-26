@@ -128,6 +128,10 @@ external local service over HTTP — no Reddit credentials, no vendored code).
 Redlib exposes **HTML only** (no `.json` routes — verified against its route
 table); the CLI scrapes its stable server-rendered templates. WRITE ops
 (posting/voting/DMs) are out of scope — read-only.
+Lifecycle is on-demand: the first `r` call auto-starts a detached local
+redlib (loopback `REDLIB_URL` only) and an idle reaper stops it after 10 min
+without use — nothing stays resident. `status` reports `autostarted: true`
+on a cold start (allow a few seconds).
 
 ```
 asocial r status                                        # ping Redlib → { reachable, version, baseUrl }
@@ -148,4 +152,5 @@ depth-capped (8) and `--limit` counts every nested reply.
   against `REDLIB_URL`.
 - `INVALID_INPUT` — bad sub/id/query/limit/sort/time. `FETCH_FAILED` —
   reachable Redlib but the fetch failed (bad sub, rate-limit, upstream error).
-- `MISSING_DEPENDENCY` — Redlib down (hint prints the build/run one-liner).
+- `MISSING_DEPENDENCY` — redlib binary missing (auto-start attempted; hint
+  tells how to install it).

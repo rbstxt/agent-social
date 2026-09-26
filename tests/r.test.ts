@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test';
 import { run } from '../src/cli.ts';
 import { parseRArgs, runR } from '../src/r.ts';
-import { createRedditEngine, parseThreadRef, type RedditEngine } from '../src/reddit.ts';
+import { createRedditEngine, ensureRedlib, findRedlibBin, parseThreadRef, type RedditEngine } from '../src/reddit.ts';
 import {
   parsePageTokens,
   parsePostList,
@@ -197,5 +197,62 @@ describe('top-level routing', () => {
     const r = await run(['r', '--help']);
     expect(r.exitCode).toBe(0);
     expect(r.stdout).toContain('asocial r');
+  });
+});
+
+describe('ensureRedlib (on-demand start, injected fakes)', () => {
+  test('already up → no spawn', async () => {
+    let spawned = 0;
+    const r = await ensureRedlib('http://127.0.0.1:8182', {
+      fetchText: async () => ({ status: 200, text: 'ok' }),
+      spawnFn: () => {
+        spawned++;
+      },
+    });
+    expect(r).toMatchObject({ started: false });
+    expect(spawned).toBe(0);
+  });
+  test('down loopback → spawn with host/port args, poll to ready', async () => {
+    let calls = 0;
+    const seen: Array<{ bin: string; args: string[] }> = [];
+    const r = await ensureRedlib('http://127.0.0.1:8182', {
+      fetchText: async () => (++calls < 3 ? { status: 500, text: '' } : { status: 200, text: 'ok' }),
+      spawnFn: (bin, args) => {
+        seen.push({ bin, args });
+      },
+    });
+    expect(r).toMatchObject({ started: true });
+    expect(seen.length).toBe(1);
+    expect(seen[0]?.args).toEqual(['--address', '127.0.0.1', '--port', '8182']);
+    expect(typeof seen[0]?.bin).toBe('string');
+  });
+  test('remote host down → never spawn', async () => {
+    let spawned = 0;
+    const r = await ensureRedlib('http://example.com:8182', {
+      fetchText: async () => {
+        throw new Error('refused');
+      },
+      spawnFn: () => {
+        spawned++;
+      },
+    });
+    expect(r).toMatchObject({ started: false });
+    expect(spawned).toBe(0);
+  });
+  test('spawn throws → started false', async () => {
+    const r = await ensureRedlib('http://127.0.0.1:8182', {
+      fetchText: async () => {
+        throw new Error('refused');
+      },
+      spawnFn: () => {
+        throw new Error('no bin');
+      },
+    });
+    expect(r).toMatchObject({ started: false });
+  });
+  test('findRedlibBin honors REDLIB_BIN', () => {
+    expect(findRedlibBin({ REDLIB_BIN: '/bin/echo', PATH: '' } as NodeJS.ProcessEnv)).toBe(
+      '/bin/echo',
+    );
   });
 });

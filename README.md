@@ -63,25 +63,27 @@ asocial r user <name> --limit 20         # profile + recent posts/comments
 Official Reddit OAuth is approval-gated, and public Redlib instances are
 unusable (rate-limited / JS-proof-walled), so `asocial r` talks to a
 **self-hosted** Redlib (AGPL-3.0, external service — our code stays MIT).
-No Docker needed on Apple Silicon; build from source (keep it outside the repo):
+Redlib auto-starts on demand: the first `r` command spawns a detached local
+`redlib` (found via `REDLIB_BIN`, `PATH`, or `~/.local/bin/redlib`) when
+`REDLIB_URL` is a loopback URL and nothing listens, then waits for readiness.
+An idle reaper (`scripts/redlib-idle-reap.sh`, launchd every 10 min,
+`com.agent-social.redlib-reap`) kills it after 10 min without use and no open
+connections — nothing stays resident. `r status` reports `autostarted: true`
+when it cold-started (expect a few seconds delay).
+
+To install the binary (once; keep the build outside the repo):
 
 ```bash
 git clone https://github.com/redlib-org/redlib /tmp/redlib-build
 cd /tmp/redlib-build && cargo build --release   # boring-sys2 compiles BoringSSL — slow, allow ~2-10 min
-./target/release/redlib --address 127.0.0.1 --port 8182
+cp target/release/redlib ~/.local/bin/redlib
 ```
 
-Then point the CLI at it (default `http://127.0.0.1:8182`):
+Then just run (default `http://127.0.0.1:8182`):
 
 ```bash
-export REDLIB_URL=http://127.0.0.1:8182
-asocial r status    # → { reachable: true, version, baseUrl }
+asocial r status    # → { reachable: true, version, baseUrl, autostarted }
 ```
-
-For persistence across reboots, the Redlib repo ships a macOS launchd
-reference (`contrib/redlib.plist`) — adapt its paths to your checkout and
-`launchctl load` it. When Redlib is down, `r` commands fail with
-`MISSING_DEPENDENCY` and the setup hint.
 
 See [SKILL.md](./SKILL.md) for the agent workflow (the funnel: cheap search →
 info shortlist → transcript peek → full read; frames pair with `startMs`).

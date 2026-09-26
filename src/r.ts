@@ -4,7 +4,7 @@
  */
 import { errorMessage } from './commands/_shared.ts';
 import { err, ok, toJson } from './output.ts';
-import { REDLIB_SETUP_HINT, createRedditEngine, resolveBaseUrl, type RedditEngine } from './reddit.ts';
+import { REDLIB_SETUP_HINT, createRedditEngine, ensureRedlib, resolveBaseUrl, touchRedlibUse, type RedditEngine } from './reddit.ts';
 import type { Envelope } from './types.ts';
 
 export const R_COMMANDS = ['status', 'posts', 'thread', 'search', 'user'] as const;
@@ -221,8 +221,24 @@ export async function runR(
   }
 }
 
-/** Creates the live engine (REDLIB_URL env) and runs an r argv. */
+/** Creates the live engine (REDLIB_URL env), auto-starting local Redlib on demand, and runs an r argv. */
 export async function mainR(argv: string[]): Promise<{ stdout: string; exitCode: number }> {
-  const engine = createRedditEngine(resolveBaseUrl());
-  return runR(argv, engine);
+  const baseUrl = resolveBaseUrl();
+  const ensured = await ensureRedlib(baseUrl).catch(() => ({ started: false }));
+  touchRedlibUse();
+  const out = await runR(argv, createRedditEngine(baseUrl));
+  if (argv[0] === 'status' && out.exitCode === 0) {
+    try {
+      const env = JSON.parse(out.stdout) as { ok: boolean; data?: Record<string, unknown> };
+      if (env.ok && env.data && typeof env.data === 'object') {
+        return {
+          stdout: toJson({ ...env, data: { ...env.data, autostarted: ensured.started } }),
+          exitCode: 0,
+        };
+      }
+    } catch {
+      // fall through with the original output
+    }
+  }
+  return out;
 }

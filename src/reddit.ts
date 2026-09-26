@@ -7,6 +7,10 @@
  * the upstream reddit `.json` is fetched server-side only). So we consume its
  * clean no-JS HTML via `reddit_parse.ts`.
  */
+import { spawn } from 'node:child_process';
+import { existsSync, writeFileSync } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import {
   parsePageError,
   parsePageTokens,
@@ -25,10 +29,10 @@ import type {
 } from './types.ts';
 
 export const REDLIB_SETUP_HINT =
-  'start a local Redlib: `git clone https://github.com/redlib-org/redlib /tmp/redlib-build && ' +
-  'cd /tmp/redlib-build && cargo build --release && ./target/release/redlib --address 127.0.0.1 --port 8182` ' +
-  '(see README), then set REDLIB_URL (default http://127.0.0.1:8182). ' +
-  'Optional macOS launchd: see redlib repo contrib/redlib.plist.';
+  'local Redlib is required and auto-starts on demand; if this error persists the redlib binary is missing — ' +
+  'install it (`git clone https://github.com/redlib-org/redlib /tmp/redlib-build && cd /tmp/redlib-build && cargo build --release`, ' +
+  'then copy target/release/redlib to ~/.local/bin/) or point REDLIB_BIN at it. ' +
+  'Set REDLIB_URL if not using the default http://127.0.0.1:8182 (see README).';
 
 export type FetchText = (url: string) => Promise<{ status: number; text: string }>;
 
@@ -61,6 +65,115 @@ export type RedditEngine = {
 export function resolveBaseUrl(env = process.env): string {
   const raw = (env['REDLIB_URL'] ?? '').trim() || 'http://127.0.0.1:8182';
   return raw.replace(/\/+$/, '');
+}
+
+const AGENT_SOCIAL_DIR = join(homedir(), '.local', 'share', 'agent-social');
+export const REDLIB_LASTUSE_FILE = join(AGENT_SOCIAL_DIR, 'redlib.lastuse');
+export const REDLIB_PORT_FILE = join(AGENT_SOCIAL_DIR, 'redlib.port');
+export const REDLIB_IDLE_SECONDS = 600;
+
+/** Records a Redlib use (for the idle reaper). Best-effort, never throws. */
+export function touchRedlibUse(): void {
+  try {
+    writeFileSync(REDLIB_LASTUSE_FILE, `${Date.now()}\n`);
+  } catch {
+    // ephemeral state only — ignore
+  }
+}
+
+function parseBaseParts(baseUrl: string): { host: string; port: string } | null {
+  try {
+    const u = new URL(baseUrl);
+    return { host: u.hostname || '127.0.0.1', port: u.port || '8080' };
+  } catch {
+    return null;
+  }
+}
+
+function isLoopback(host: string): boolean {
+  return host === '127.0.0.1' || host === 'localhost' || host === '::1';
+}
+
+/** Locates the redlib binary: REDLIB_BIN, PATH, then ~/.local/bin/redlib. */
+export function findRedlibBin(env = process.env): string | null {
+  const cands: string[] = [];
+  const envBin = (env['REDLIB_BIN'] ?? '').trim();
+  if (envBin) cands.push(envBin);
+  cands.push('redlib', join(homedir(), '.local', 'bin', 'redlib'));
+  const pathDirs = (env['PATH'] ?? '').split(':');
+  for (const c of cands) {
+    if (c.includes('/')) {
+      try {
+        if (existsSync(c)) return c;
+      } catch {
+        // next
+      }
+      continue;
+    }
+    for (const d of pathDirs) {
+      const p = join(d, c);
+      try {
+        if (d && existsSync(p)) return p;
+      } catch {
+        // next
+      }
+    }
+  }
+  return null;
+}
+
+export type SpawnFn = (bin: string, args: string[]) => void;
+
+const defaultSpawn: SpawnFn = (bin, args) => {
+  const child = spawn(bin, args, { detached: true, stdio: 'ignore' });
+  child.unref();
+};
+
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
+/**
+ * On-demand Redlib: if `baseUrl` is a loopback URL and nothing listens,
+ * spawn a detached local redlib and wait until it answers. Records the
+ * port + use-timestamp for the idle reaper. Returns `{ started }`.
+ * Never spawns for remote hosts; returns `{ started: false }` when the
+ * binary is missing (callers fall through to MISSING_DEPENDENCY).
+ */
+export async function ensureRedlib(
+  baseUrl: string,
+  deps: { fetchText?: FetchText; spawnFn?: SpawnFn; readyTimeoutMs?: number } = {},
+): Promise<{ started: boolean }> {
+  const fetch = deps.fetchText ?? defaultFetchText;
+  try {
+    const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/`);
+    if (res.status >= 200 && res.status < 300) return { started: false };
+  } catch {
+    // not listening — try to start below
+  }
+  const parts = parseBaseParts(baseUrl);
+  if (!parts || !isLoopback(parts.host)) return { started: false };
+  const bin = findRedlibBin();
+  if (!bin) return { started: false };
+  try {
+    (deps.spawnFn ?? defaultSpawn)(bin, ['--address', parts.host, '--port', parts.port]);
+  } catch {
+    return { started: false };
+  }
+  try {
+    writeFileSync(REDLIB_PORT_FILE, `${parts.port}\n`);
+  } catch {
+    // ignore
+  }
+  const deadline = Date.now() + (deps.readyTimeoutMs ?? 20_000);
+  for (;;) {
+    try {
+      const res = await fetch(`${baseUrl.replace(/\/+$/, '')}/`);
+      if (res.status >= 200 && res.status < 300) return { started: true };
+    } catch {
+      // not ready yet
+    }
+    if (Date.now() >= deadline) return { started: false };
+    await sleep(300);
+  }
 }
 
 const ARCTIC = 'https://arctic-shift.photon-reddit.com';
