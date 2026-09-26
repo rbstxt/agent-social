@@ -11,9 +11,10 @@
  * Credentials are NEVER logged: all error text is scrubbed before it leaves
  * this module.
  */
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 
 export type XErrorKind = 'missing-creds' | 'missing-binary' | 'auth' | 'fetch' | 'timeout';
@@ -51,7 +52,25 @@ export type XEngineOpts = {
   accountName?: string;
 };
 
-/** Reads X_AUTH_TOKEN / X_CT0 from env, falling back to `./.env` (cwd). */
+/** .env search order: $CWD first, then the installed package root (global use). */
+function dotEnvPaths(): string[] {
+  const paths = [join(process.cwd(), '.env')];
+  try {
+    let dir = dirname(fileURLToPath(import.meta.url));
+    for (let i = 0; i < 4; i++) {
+      if (existsSync(join(dir, 'package.json'))) {
+        paths.push(join(dir, '.env'));
+        break;
+      }
+      dir = dirname(dir);
+    }
+  } catch {
+    // ignore — cwd fallback already present
+  }
+  return paths;
+}
+
+/** Reads X_AUTH_TOKEN / X_CT0 from env, falling back to `.env` (cwd, then package root). */
 export function resolveXCreds(
   env: NodeJS.ProcessEnv = process.env,
   opts: { readDotEnv?: boolean } = {},
@@ -63,17 +82,20 @@ export function resolveXCreds(
   let ct0 = (env['X_CT0'] ?? '').trim();
   if (authToken && ct0) return { authToken, ct0 };
   if (opts.readDotEnv === false) return null;
-  try {
-    const body = readFileSync(join(process.cwd(), '.env'), 'utf-8');
-    for (const line of body.split('\n')) {
-      const m = line.match(/^\s*(X_AUTH_TOKEN|X_CT0)\s*=\s*(.*?)\s*$/);
-      if (!m) continue;
-      const val = (m[2] ?? '').replace(/^["']|["']$/g, '');
-      if (m[1] === 'X_AUTH_TOKEN' && !authToken) authToken = val;
-      if (m[1] === 'X_CT0' && !ct0) ct0 = val;
+  for (const p of dotEnvPaths()) {
+    try {
+      const body = readFileSync(p, 'utf-8');
+      for (const line of body.split('\n')) {
+        const m = line.match(/^\s*(X_AUTH_TOKEN|X_CT0)\s*=\s*(.*?)\s*$/);
+        if (!m) continue;
+        const val = (m[2] ?? '').replace(/^["']|["']$/g, '');
+        if (m[1] === 'X_AUTH_TOKEN' && !authToken) authToken = val;
+        if (m[1] === 'X_CT0' && !ct0) ct0 = val;
+      }
+    } catch {
+      // no .env here — try next
     }
-  } catch {
-    // no .env — fall through to null
+    if (authToken && ct0) break;
   }
   return authToken && ct0 ? { authToken, ct0 } : null;
 }

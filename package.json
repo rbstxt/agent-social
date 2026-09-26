@@ -7,7 +7,7 @@
     "asocial": "./dist/asocial.js"
   },
   "scripts": {
-    "build": "tsup",
+    "build": "tsup && chmod +x dist/asocial.js",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "check": "bun run typecheck && bun test"

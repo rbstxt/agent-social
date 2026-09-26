@@ -1,13 +1,11 @@
 ---
 name: agent-social
 description: >
-  Research YouTube via the `asocial yt` CLI — search videos, rank on cheap
-  metadata, fetch descriptions/chapters/channel metadata, peek or read
-  transcripts, extract still frames, and get embeddable video IDs. Use whenever
-  the task involves finding, evaluating, summarizing, quoting, or embedding
-  YouTube videos — "find videos about X", "what does this video say", "get the
-  transcript", "summarize this YouTube link" — or when a YouTube URL or video
-  ID appears and its content is needed.
+  Research YouTube, X/Twitter, and Reddit via the `asocial` CLI.
+  YouTube: search videos, fetch descriptions/chapters/channel metadata, peek
+  or read transcripts, extract still frames. X: search tweets, read threads,
+  profiles (read-only). Reddit: subreddit posts, threads, search, users via
+  local Redlib. Use whenever the task needs content from these platforms.
 ---
 
 # agent-social — YouTube
