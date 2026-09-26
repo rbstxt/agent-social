@@ -142,7 +142,7 @@ echo "   Unattended: export ASOCIAL_X_AUTH_TOKEN / ASOCIAL_X_CT0 / ASOCIAL_YT_CO
 echo "   X/Twitter cookies: browser DevTools → Application → Cookies → x.com → copy auth_token and ct0."
 if [ -n "$(env_get X_AUTH_TOKEN)" ] && [ -n "$(env_get X_CT0)" ] && [ "$RECONF" = 0 ]; then ok "X cookies already set";
 else
-  A="${ASOCIAL_X_AUTH_TOKEN:-}"; C="${ASOCIAL_X_CT0:-}"
+  A="${ASOCIAL_X_AUTH_TOKEN:-${X_AUTH_TOKEN:-}}"; C="${ASOCIAL_X_CT0:-${X_CT0:-}}"
   if [ -z "$A" ]; then A="$(ask_secret 'X auth_token')"; fi
   if [ -z "$C" ]; then C="$(ask_secret 'X ct0')"; fi
   if [ -n "$A" ] && [ -n "$C" ]; then env_set X_AUTH_TOKEN "$A"; env_set X_CT0 "$C"; ok "X cookies saved to .env";
@@ -151,7 +151,7 @@ fi
 echo "   YouTube cookie (optional): youtube.com DevTools → Cookies → copy the whole Cookie header. Enables age-restricted videos."
 if [ -n "$(env_get YT_COOKIE)" ] && [ "$RECONF" = 0 ]; then ok "YT cookie already set";
 else
-  Y="${ASOCIAL_YT_COOKIE:-}"
+  Y="${ASOCIAL_YT_COOKIE:-${YT_COOKIE:-}}"
   if [ -z "$Y" ]; then Y="$(ask_secret 'YT Cookie header')"; fi
   if [ -n "$Y" ]; then env_set YT_COOKIE "$Y"; ok "YT cookie saved (used by youtubei.js + yt-dlp frames)";
   else ok "YT cookie skipped (optional)"; fi

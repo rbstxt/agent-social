@@ -180,3 +180,32 @@ describe('resolveYtCookie (no secrets)', () => {
     expect(resolveYtCookie({} as NodeJS.ProcessEnv, { readDotEnv: false })).toBe('');
   });
 });
+
+describe('netscapeToHeader / resolveYtCookieFile (no secrets)', () => {
+  test('netscape body becomes header pairs', async () => {
+    const { netscapeToHeader } = await import('../src/youtube.ts');
+    const body = [
+      '# Netscape HTTP Cookie File',
+      '',
+      '.youtube.com\tTRUE\t/\tTRUE\t9999999999\tSID\tabc123',
+      '.youtube.com\tTRUE\t/\tTRUE\t9999999999\tHSID\tx y',
+      '.youtube.com\tTRUE\t/\tTRUE\t9999999999\tEMPTY\t',
+      'short\tline',
+    ].join('\n');
+    expect(netscapeToHeader(body)).toBe('SID=abc123; HSID=x y');
+    expect(netscapeToHeader('')).toBe('');
+    expect(netscapeToHeader('# only comments\n')).toBe('');
+  });
+  test('resolveYtCookie prefers header, falls back to file', async () => {
+    const { resolveYtCookie, resolveYtCookieFile } = await import('../src/youtube.ts');
+    const env = {
+      YT_COOKIE: 'SID=x',
+      YT_COOKIES_FILE: '/nonexistent',
+    } as NodeJS.ProcessEnv;
+    expect(resolveYtCookie(env)).toBe('SID=x');
+    expect(resolveYtCookieFile(env)).toBe('/nonexistent');
+    expect(resolveYtCookie({} as NodeJS.ProcessEnv, { readDotEnv: false })).toBe('');
+    expect(resolveYtCookieFile({} as NodeJS.ProcessEnv, { readDotEnv: false })).toBeNull();
+    expect(resolveYtCookie({ YT_COOKIES_FILE: '/nonexistent' } as NodeJS.ProcessEnv)).toBe('');
+  });
+});

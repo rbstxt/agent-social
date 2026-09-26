@@ -43,17 +43,26 @@ export interface Engine {
 }
 
 /**
- * Reads YT_COOKIE (raw `Cookie` header value for youtube.com) from env,
- * falling back to `.env` (cwd, then installed package root). Optional:
- * enables logged-in access (age-restricted videos, higher rate budget).
- * Returns '' when unset.
+ * Parses a Netscape cookies.txt body into a raw `Cookie` header string
+ * (`a=1; b=2`). Skips comments/blank lines and the bare `#HttpOnly` prefix
+ * some exporters emit. Returns '' when nothing usable is found.
  */
-export function resolveYtCookie(
-  env: NodeJS.ProcessEnv = process.env,
-  opts: { readDotEnv?: boolean } = {},
-): string {
-  let cookie = (env['YT_COOKIE'] ?? '').trim();
-  if (cookie || opts.readDotEnv === false) return cookie;
+export function netscapeToHeader(body: string): string {
+  const pairs: string[] = [];
+  for (const raw of body.split('\n')) {
+    const line = raw.trim();
+    if (!line || line.startsWith('#')) continue;
+    const fields = line.split('\t');
+    if (fields.length < 7) continue;
+    const name = (fields[5] ?? '').trim();
+    const value = (fields[6] ?? '').trim();
+    if (!name || !value) continue;
+    pairs.push(`${name}=${value}`);
+  }
+  return pairs.join('; ');
+}
+
+function dotEnvCandidates(): string[] {
   const candidates = [join(process.cwd(), '.env')];
   // package root: walk up from this module to package.json (works for src/ and dist/)
   try {
@@ -69,21 +78,66 @@ export function resolveYtCookie(
   } catch {
     // ignore
   }
-  for (const p of candidates) {
+  return candidates;
+}
+
+function dotEnvLookup(key: string): string {
+  for (const p of dotEnvCandidates()) {
     try {
       const body = readFileSync(p, 'utf-8');
       for (const line of body.split('\n')) {
-        const m = line.match(/^\s*YT_COOKIE\s*=\s*(.*?)\s*$/);
+        const m = line.match(new RegExp(`^\\s*${key}\\s*=\\s*(.*?)\\s*$`));
         if (!m) continue;
         const val = (m[1] ?? '').replace(/^["']|["']$/g, '');
-        if (val && !cookie) cookie = val;
+        if (val) return val;
       }
     } catch {
       // no .env here — try next
     }
-    if (cookie) break;
   }
-  return cookie;
+  return '';
+}
+
+/**
+ * Resolves the YouTube login cookie as a raw `Cookie` header string.
+ * Sources (first hit wins): `YT_COOKIE` env, `YT_COOKIE` in `.env`
+ * (cwd, then installed package root), `YT_COOKIES_FILE` env or `.env`
+ * (Netscape file path, converted). Optional: enables logged-in access
+ * (age-restricted videos, higher rate budget). Returns '' when unset.
+ */
+export function resolveYtCookie(
+  env: NodeJS.ProcessEnv = process.env,
+  opts: { readDotEnv?: boolean } = {},
+): string {
+  const direct = (env['YT_COOKIE'] ?? '').trim();
+  if (direct) return direct;
+  if (opts.readDotEnv === false) return '';
+  const fromDotEnv = dotEnvLookup('YT_COOKIE');
+  if (fromDotEnv) return fromDotEnv;
+  const file =
+    (env['YT_COOKIES_FILE'] ?? '').trim() || dotEnvLookup('YT_COOKIES_FILE');
+  if (!file) return '';
+  try {
+    return netscapeToHeader(readFileSync(file, 'utf-8'));
+  } catch {
+    return '';
+  }
+}
+
+/**
+ * Resolves a Netscape cookie FILE path for yt-dlp `--cookies`, or null.
+ * Prefers an explicit `YT_COOKIES_FILE` (env/`.env`); otherwise null
+ * (callers fall back to a temp file converted from the header string).
+ */
+export function resolveYtCookieFile(
+  env: NodeJS.ProcessEnv = process.env,
+  opts: { readDotEnv?: boolean } = {},
+): string | null {
+  const direct = (env['YT_COOKIES_FILE'] ?? '').trim();
+  if (direct) return direct;
+  if (opts.readDotEnv === false) return null;
+  const fromDotEnv = dotEnvLookup('YT_COOKIES_FILE');
+  return fromDotEnv || null;
 }
 
 export async function createEngine(opts: { cookie?: string } = {}): Promise<Engine> {

@@ -46,7 +46,7 @@ logged or committed (`.env` is gitignored). Unattended use:
 npx skills add rbstxt/agent-social -g -a opencode -y   # global, OpenCode
 ```
 
-Other agents: replace `-a opencode` (e.g. `-a claude-code`), or drop `-a`
+(For opencode this lands in `~/.agents/skills/agent-social`.) Other agents:
 for auto-detect. Project-local instead of global: drop `-g`.
 `npx skills update agent-social -y` refreshes it after `git pull`.
 The skill's `description` advertises it; the agent loads `SKILL.md` on demand,

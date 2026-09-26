@@ -3,7 +3,7 @@
  * binaries (yt-dlp + ffmpeg/ffprobe); everything else is pure TypeScript.
  */
 import { spawn } from 'node:child_process';
-import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -135,8 +135,17 @@ function exec(
   });
 }
 
-/** Real extractor backed by yt-dlp (URL resolution) + ffmpeg/ffprobe. Pass a raw `Cookie` header string to resolve age-restricted videos. */
-export function createFrameExtractor(cookieHeader = ''): FrameExtractor {
+/**
+ * Real extractor backed by yt-dlp (URL resolution) + ffmpeg/ffprobe.
+ * Auth options (age-restricted videos): `cookieFile` (Netscape path, used
+ * directly) or `cookieHeader` (raw `Cookie` string, converted to a temp file
+ * per call). File wins when both are given.
+ */
+export function createFrameExtractor(
+  opts: { cookieHeader?: string; cookieFile?: string | null } | string = {},
+): FrameExtractor {
+  const { cookieHeader = '', cookieFile = null } =
+    typeof opts === 'string' ? { cookieHeader: opts } : opts;
   return {
     async depsAvailable() {
       const [ff, yd] = await Promise.all([
@@ -148,10 +157,12 @@ export function createFrameExtractor(cookieHeader = ''): FrameExtractor {
 
     async resolveStreamUrl(id, res) {
       const watch = `https://www.youtube.com/watch?v=${id}`;
-      const cookieFile = writeTempCookieFile(cookieHeader);
+      const directFile = cookieFile && existsSync(cookieFile) ? cookieFile : null;
+      const tempFile = directFile ? null : writeTempCookieFile(cookieHeader);
+      const activeFile = directFile ?? tempFile;
       try {
-        const args = cookieFile
-          ? ['--cookies', cookieFile, '-f', ytdlpFormat(res), '-g', watch]
+        const args = activeFile
+          ? ['--cookies', activeFile, '-f', ytdlpFormat(res), '-g', watch]
           : ['-f', ytdlpFormat(res), '-g', watch];
         const r = await exec('yt-dlp', args);
         const url = r.stdout
@@ -163,7 +174,7 @@ export function createFrameExtractor(cookieHeader = ''): FrameExtractor {
         }
         return url;
       } finally {
-        removeTempCookieFile(cookieFile);
+        removeTempCookieFile(tempFile);
       }
     },
 

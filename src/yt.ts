@@ -6,7 +6,7 @@ import { createFrameExtractor, parseTimeToSeconds } from './frame.ts';
 import { err, toJson } from './output.ts';
 import type { Envelope } from './types.ts';
 import type { Engine, SearchOpts } from './youtube.ts';
-import { createEngine, resolveYtCookie } from './youtube.ts';
+import { createEngine, resolveYtCookie, resolveYtCookieFile } from './youtube.ts';
 import { runFrames } from './commands/frames.ts';
 import { runInfo } from './commands/info.ts';
 import { runSearch } from './commands/search.ts';
@@ -295,6 +295,7 @@ function hasFlag(argv: string[], flag: string): boolean {
 /** Creates the live engine and runs a yt argv (used by the top-level CLI). */
 export async function mainYt(argv: string[], stdin: string): Promise<{ stdout: string; exitCode: number }> {
   const cookie = resolveYtCookie();
+  const cookieFile = resolveYtCookieFile();
   const engine = await createEngine(cookie ? { cookie } : {});
-  return runYt(argv, engine, stdin, createFrameExtractor(cookie));
+  return runYt(argv, engine, stdin, createFrameExtractor({ cookieHeader: cookie, cookieFile }));
 }
