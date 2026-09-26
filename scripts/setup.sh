@@ -80,7 +80,11 @@ if [ "$PY" = 1 ]; then
 else ok "python step skipped"; fi
 
 echo "-- 4/7 redlib binary (Reddit backend)"
-if [ -x "$HOME/.local/bin/redlib" ]; then ok "~/.local/bin/redlib present";
+REDLIB_FOUND=""
+[ -n "${REDLIB_BIN:-}" ] && [ -x "$REDLIB_BIN" ] && REDLIB_FOUND="$REDLIB_BIN"
+[ -z "$REDLIB_FOUND" ] && have redlib && REDLIB_FOUND="$(command -v redlib)"
+[ -z "$REDLIB_FOUND" ] && [ -x "$HOME/.local/bin/redlib" ] && REDLIB_FOUND="$HOME/.local/bin/redlib"
+if [ -n "$REDLIB_FOUND" ]; then ok "redlib already installed ($REDLIB_FOUND — skipping)";
 elif [ "$BUILD_REDLIB" = 1 ]; then
   ARCH="$(uname -m)"; SYS="$(uname -s | tr '[:upper:]' '[:lower:]')"
   if [ "$SYS" = linux ]; then
@@ -103,13 +107,19 @@ echo "-- 5/7 repo deps + build + link"
 if [ "$PM" = bun ]; then (cd "$REPO" && bun install 2>&1 | tail -1 && bun run build 2>&1 | tail -1);
 else (cd "$REPO" && npm install --no-audit --no-fund 2>&1 | tail -1 && npm run build 2>&1 | tail -1); fi
 (cd "$REPO" && (bun test 2>&1 || npm test 2>&1) | tail -3)
-if [ "$LINK" = 1 ]; then (cd "$REPO" && npm link 2>&1 | tail -1) && ok "asocial linked globally" || warn "npm link failed — use ./dist/asocial.js directly"; fi
+if [ "$LINK" = 1 ]; then
+  if have asocial; then ok "asocial already linked ($(command -v asocial) — skipping)";
+  else (cd "$REPO" && npm link 2>&1 | tail -1) && ok "asocial linked globally" || warn "npm link failed — use ./dist/asocial.js directly"; fi
+fi
 
 echo "-- 6/7 macOS idle-reaper for Redlib (no resident process)"
 if [ "$OS" = Darwin ]; then
   launchctl unload "$HOME/Library/LaunchAgents/com.agent-social.redlib.plist" 2>/dev/null || true
   rm -f "$HOME/Library/LaunchAgents/com.agent-social.redlib.plist"
   mkdir -p "$HOME/.local/share/agent-social"
+  if launchctl list 2>/dev/null | grep -q com.agent-social.redlib-reap; then
+    ok "idle reaper already installed (skipping)"
+  else
   cat >"$HOME/Library/LaunchAgents/com.agent-social.redlib-reap.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -135,6 +145,7 @@ PLIST
   launchctl load "$HOME/Library/LaunchAgents/com.agent-social.redlib-reap.plist" 2>/dev/null \
     && ok "idle reaper installed (kills Redlib after 10 min idle)" \
     || warn "reaper plist install failed — see README";
+  fi
 else ok "non-macOS — run redlib on demand; CLI auto-starts it"; fi
 
 echo "-- 7/7 credentials (.env — values stay in this file, never committed)"
@@ -150,6 +161,7 @@ else
 fi
 echo "   YouTube cookie (optional): youtube.com DevTools → Cookies → copy the whole Cookie header. Enables age-restricted videos."
 if [ -n "$(env_get YT_COOKIE)" ] && [ "$RECONF" = 0 ]; then ok "YT cookie already set";
+elif [ -n "$(env_get YT_COOKIES_FILE)" ] && [ "$RECONF" = 0 ]; then ok "YT cookie file already set ($(env_get YT_COOKIES_FILE) — skipping)";
 else
   Y="${ASOCIAL_YT_COOKIE:-${YT_COOKIE:-}}"
   if [ -z "$Y" ]; then Y="$(ask_secret 'YT Cookie header')"; fi
