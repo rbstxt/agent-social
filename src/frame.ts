@@ -3,6 +3,49 @@
  * binaries (yt-dlp + ffmpeg/ffprobe); everything else is pure TypeScript.
  */
 import { spawn } from 'node:child_process';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+/**
+ * Converts a raw `Cookie` header string (`a=1; b=2`) to Netscape cookies.txt
+ * for yt-dlp `--cookies`. Domain-scoped to `.youtube.com` with a far-future
+ * expiry (session cookies work fine). Returns '' for empty input.
+ */
+export function cookieHeaderToNetscape(header: string): string {
+  const lines = ['# Netscape HTTP Cookie File'];
+  for (const part of header.split(';')) {
+    const eq = part.indexOf('=');
+    if (eq <= 0) continue;
+    const name = part.slice(0, eq).trim();
+    const value = part.slice(eq + 1).trim();
+    if (!name || !value) continue;
+    lines.push(['.youtube.com', 'TRUE', '/', 'TRUE', '2147483647', name, value].join('\t'));
+  }
+  return lines.length > 1 ? `${lines.join('\n')}\n` : '';
+}
+
+/**
+ * Writes a temp Netscape cookie file for one yt-dlp invocation. Returns the
+ * path, or null when no cookie was given. Callers delete it in a finally.
+ */
+export function writeTempCookieFile(cookieHeader: string): string | null {
+  const body = cookieHeaderToNetscape(cookieHeader);
+  if (!body) return null;
+  const dir = mkdtempSync(join(tmpdir(), 'asocial-cookies-'));
+  const path = join(dir, 'cookies.txt');
+  writeFileSync(path, body);
+  return path;
+}
+
+export function removeTempCookieFile(path: string | null): void {
+  if (!path) return;
+  try {
+    rmSync(join(path, '..'), { recursive: true, force: true });
+  } catch {
+    // best-effort
+  }
+}
 
 /**
  * Parses a time expression to seconds. Accepts plain seconds ("90", "7.5"),
@@ -92,8 +135,8 @@ function exec(
   });
 }
 
-/** Real extractor backed by yt-dlp (URL resolution) + ffmpeg/ffprobe. */
-export function createFrameExtractor(): FrameExtractor {
+/** Real extractor backed by yt-dlp (URL resolution) + ffmpeg/ffprobe. Pass a raw `Cookie` header string to resolve age-restricted videos. */
+export function createFrameExtractor(cookieHeader = ''): FrameExtractor {
   return {
     async depsAvailable() {
       const [ff, yd] = await Promise.all([
@@ -105,15 +148,23 @@ export function createFrameExtractor(): FrameExtractor {
 
     async resolveStreamUrl(id, res) {
       const watch = `https://www.youtube.com/watch?v=${id}`;
-      const r = await exec('yt-dlp', ['-f', ytdlpFormat(res), '-g', watch]);
-      const url = r.stdout
-        .split('\n')
-        .map((s) => s.trim())
-        .filter(Boolean)[0];
-      if (r.code !== 0 || !url) {
-        throw new Error(`yt-dlp could not resolve a stream URL (exit ${r.code})`);
+      const cookieFile = writeTempCookieFile(cookieHeader);
+      try {
+        const args = cookieFile
+          ? ['--cookies', cookieFile, '-f', ytdlpFormat(res), '-g', watch]
+          : ['-f', ytdlpFormat(res), '-g', watch];
+        const r = await exec('yt-dlp', args);
+        const url = r.stdout
+          .split('\n')
+          .map((s) => s.trim())
+          .filter(Boolean)[0];
+        if (r.code !== 0 || !url) {
+          throw new Error(`yt-dlp could not resolve a stream URL (exit ${r.code})`);
+        }
+        return url;
+      } finally {
+        removeTempCookieFile(cookieFile);
       }
-      return url;
     },
 
     async grabFrame(url, seconds, outPath, format) {

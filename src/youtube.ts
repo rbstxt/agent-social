@@ -6,6 +6,8 @@
  * intentionally thin and delegate to those normalizers.
  */
 import { Innertube } from 'youtubei.js';
+import { existsSync, readFileSync } from 'node:fs';
+import { join } from 'node:path';
 
 import {
   extractChannelRef,
@@ -40,11 +42,59 @@ export interface Engine {
   getTranscript(id: string, lang?: string): Promise<TranscriptResult>;
 }
 
-export async function createEngine(): Promise<Engine> {
+/**
+ * Reads YT_COOKIE (raw `Cookie` header value for youtube.com) from env,
+ * falling back to `.env` (cwd, then installed package root). Optional:
+ * enables logged-in access (age-restricted videos, higher rate budget).
+ * Returns '' when unset.
+ */
+export function resolveYtCookie(
+  env: NodeJS.ProcessEnv = process.env,
+  opts: { readDotEnv?: boolean } = {},
+): string {
+  let cookie = (env['YT_COOKIE'] ?? '').trim();
+  if (cookie || opts.readDotEnv === false) return cookie;
+  const candidates = [join(process.cwd(), '.env')];
+  // package root: walk up from this module to package.json (works for src/ and dist/)
+  try {
+    const here = new URL('.', import.meta.url);
+    let dir = here.pathname;
+    for (let i = 0; i < 4; i++) {
+      dir = join(dir, '..');
+      if (existsSync(join(dir, 'package.json'))) {
+        candidates.push(join(dir, '.env'));
+        break;
+      }
+    }
+  } catch {
+    // ignore
+  }
+  for (const p of candidates) {
+    try {
+      const body = readFileSync(p, 'utf-8');
+      for (const line of body.split('\n')) {
+        const m = line.match(/^\s*YT_COOKIE\s*=\s*(.*?)\s*$/);
+        if (!m) continue;
+        const val = (m[1] ?? '').replace(/^["']|["']$/g, '');
+        if (val && !cookie) cookie = val;
+      }
+    } catch {
+      // no .env here — try next
+    }
+    if (cookie) break;
+  }
+  return cookie;
+}
+
+export async function createEngine(opts: { cookie?: string } = {}): Promise<Engine> {
   // `generate_session_locally` is REQUIRED for transcripts: it makes the player
   // response return a fully-signed `timedtext` caption URL. Without it the
   // caption URL is unsigned and returns HTTP 200 with an empty body.
-  const yt = await Innertube.create({ generate_session_locally: true });
+  // `cookie` is optional (logged-in session: age-restricted/private access).
+  const yt = await Innertube.create({
+    generate_session_locally: true,
+    ...(opts.cookie ? { cookie: opts.cookie } : {}),
+  });
 
   return {
     async search(query, opts) {

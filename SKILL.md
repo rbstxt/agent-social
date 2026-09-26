@@ -88,6 +88,9 @@ height } | { at, error }] }`. Visuals often lag narration — grab
 - **Embedding**: every video result has `embedUrl` (`https://www.youtube.com/embed/<id>`).
 - **Batch/stdin**: `info`/`transcript` take many ids → array out (single id stays a
   single envelope). Pipe: `... | asocial yt info -`.
+- **Login cookie (optional)**: `YT_COOKIE` in `.env` (raw youtube.com Cookie
+  header) enables logged-in access — age-restricted videos for
+  search/info/transcript and cookie-authenticated `frames`. Empty = anonymous.
 - **Not implemented**: full video download, audio extraction (both trivially
   yt-dlp-replaceable — use yt-dlp directly).
 

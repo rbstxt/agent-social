@@ -38,3 +38,27 @@ describe('ytdlpFormat / ffmpegArgs / frameOutputName', () => {
     expect(frameOutputName('abc', 90.4, 'jpg')).toBe('abc-90s.jpg');
   });
 });
+
+describe('cookieHeaderToNetscape / writeTempCookieFile', () => {
+  test('header pairs become tab-separated netscape lines', async () => {
+    const { cookieHeaderToNetscape } = await import('../src/frame.ts');
+    const out = cookieHeaderToNetscape('SID=abc123; HSID=xy z; empty=; =junk; solo');
+    expect(out.startsWith('# Netscape HTTP Cookie File\n')).toBe(true);
+    expect(out).toContain('.youtube.com\tTRUE\t/\tTRUE\t2147483647\tSID\tabc123');
+    expect(out).toContain('\tHSID\txy z');
+    expect(out).not.toContain('empty');
+    expect(cookieHeaderToNetscape('')).toBe('');
+    expect(cookieHeaderToNetscape('  ')).toBe('');
+  });
+  test('temp file round-trips and cleans up', async () => {
+    const { writeTempCookieFile, removeTempCookieFile } = await import('../src/frame.ts');
+    const { existsSync } = await import('node:fs');
+    expect(writeTempCookieFile('')).toBeNull();
+    const p = writeTempCookieFile('SID=abc;');
+    expect(p).not.toBeNull();
+    expect(existsSync(p as string)).toBe(true);
+    removeTempCookieFile(p);
+    expect(existsSync(p as string)).toBe(false);
+    expect(existsSync((p as string).replace(/\/[^/]+$/, ''))).toBe(false);
+  });
+});

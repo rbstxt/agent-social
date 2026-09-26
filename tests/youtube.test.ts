@@ -172,3 +172,11 @@ describe('parseHeaderRows', () => {
     expect(parseHeaderRows(null)).toEqual({ title: null, handle: null, subscriberText: null });
   });
 });
+
+describe('resolveYtCookie (no secrets)', () => {
+  test('env direct; empty without sources', async () => {
+    const { resolveYtCookie } = await import('../src/youtube.ts');
+    expect(resolveYtCookie({ YT_COOKIE: 'SID=x' } as NodeJS.ProcessEnv)).toBe('SID=x');
+    expect(resolveYtCookie({} as NodeJS.ProcessEnv, { readDotEnv: false })).toBe('');
+  });
+});

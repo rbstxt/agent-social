@@ -2,39 +2,48 @@
 
 Agent-first CLI + Skill for YouTube / X / Reddit.
 
-**YouTube module: built. X module: built (needs twscrape + `.env` cookies). Reddit module: built (needs local Redlib, below).**
+**YouTube / X / Reddit modules: built.** X needs twscrape + `.env` cookies. Reddit's Redlib auto-starts on demand (nothing resident).
 
 Design credit: the YouTube module's envelope/funnel design is adapted from
 [Tamas Gabor's youtube-relay-mcp](https://github.com/gabros20/youtube-relay-mcp)
 (MIT) — fresh implementation, no shared code.
 
-## Install
+## Install (one script)
 
 ```bash
-bun install
-bun run build        # → dist/asocial.js
-bun link             # or: npm i -g .   (exposes `asocial` on PATH)
+./scripts/setup.sh
 ```
 
-Prerequisites: `bun` (or node ≥ 18). `frames` additionally needs
-`ffmpeg` + `yt-dlp` on PATH (`brew install ffmpeg yt-dlp`). The `x` module
-needs the external `twscrape` backend on PATH:
+This checks/installs everything and guides cookie setup:
+
+1. runtime: node ≥ 18, bun or npm
+2. system: `ffmpeg`, `yt-dlp` (macOS: via brew when available)
+3. python: `twscrape` (+ `yt-dlp` fallback) via pipx or pip --user
+4. `redlib` binary (Linux: release download; macOS: cargo build; skipped if present)
+5. repo deps + build + `npm link` (global `asocial`; `--no-link` to skip)
+6. macOS Redlib idle-reaper (launchd; nothing stays resident)
+7. credentials → `.env` (gitignored, `chmod 600`):
+   - **X (required for `x`)**: guided prompt for `auth_token` + `ct0`
+     (x.com DevTools → Application → Cookies). Validate: `asocial x status`.
+     Re-extract when auth breaks.
+   - **YouTube (optional)**: guided prompt for the youtube.com `Cookie`
+     header → `YT_COOKIE`. Enables age-restricted videos for
+     `yt search/info/transcript` (youtubei.js login) and `yt frames`
+     (yt-dlp `--cookies`). Empty = anonymous access.
+
+Flags: `--yes --no-link --skip-redlib --skip-python --reconfigure --help`.
+Secrets are read with echo disabled and never printed. No secrets are ever
+logged or committed (`.env` is gitignored).
+
+Manual equivalent (if you prefer each step by hand):
 
 ```bash
-pip install twscrape        # or: pipx install twscrape
-twscrape version            # should print a version (0.20.1 verified)
+bun install && bun run build   # or: npm install && npm run build
+npm link                       # exposes `asocial` on PATH
+pipx install twscrape yt-dlp   # or: pip install --user twscrape yt-dlp
+# redlib: see "Reddit backend" below
+cp .env.example .env           # then fill X_AUTH_TOKEN/X_CT0 (+ optional YT_COOKIE)
 ```
-
-Then add X cookies (no secrets are ever logged or committed):
-
-```bash
-cp .env.example .env
-```
-
-and fill in `X_AUTH_TOKEN` + `X_CT0` from a logged-in x.com browser session
-(DevTools → Application → Cookies → x.com). Validate with
-`asocial x status`. If auth breaks later, re-extract both cookies and update
-`.env` (gitignored — never commit it).
 
 ## Usage
 
