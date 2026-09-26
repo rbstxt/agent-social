@@ -8,7 +8,9 @@ Design credit: the YouTube module's envelope/funnel design is adapted from
 [Tamas Gabor's youtube-relay-mcp](https://github.com/gabros20/youtube-relay-mcp)
 (MIT) — fresh implementation, no shared code.
 
-## Install (one script)
+## Install
+
+CLI (this script installs everything the CLI needs):
 
 ```bash
 ./scripts/setup.sh
@@ -33,7 +35,22 @@ This checks/installs everything and guides cookie setup:
 
 Flags: `--yes --no-link --skip-redlib --skip-python --reconfigure --help`.
 Secrets are read with echo disabled and never printed. No secrets are ever
-logged or committed (`.env` is gitignored).
+logged or committed (`.env` is gitignored). Unattended use:
+`ASOCIAL_X_AUTH_TOKEN` / `ASOCIAL_X_CT0` / `ASOCIAL_YT_COOKIE` env vars.
+
+## Skill (separate — via [vercel-labs/skills](https://github.com/vercel-labs/skills))
+
+`setup.sh` installs only the CLI. Register the skill with the standard tool:
+
+```bash
+npx skills add rbstxt/agent-social -g -a opencode -y   # global, OpenCode
+```
+
+Other agents: replace `-a opencode` (e.g. `-a claude-code`), or drop `-a`
+for auto-detect. Project-local instead of global: drop `-g`.
+`npx skills update agent-social -y` refreshes it after `git pull`.
+The skill's `description` advertises it; the agent loads `SKILL.md` on demand,
+so it costs ~0 context until used.
 
 Manual equivalent (if you prefer each step by hand):
 

@@ -1,6 +1,8 @@
 #!/bin/bash
-# agent-social setup: installs deps, builds the CLI, guides cookie setup.
+# agent-social setup: installs the CLI, builds repo deps, guides cookie setup.
+# (Skill installation is separate — see README, via `npx skills add`.)
 # Usage: ./scripts/setup.sh [--yes] [--no-link] [--skip-redlib] [--skip-python] [--reconfigure]
+# Unattended secrets: ASOCIAL_X_AUTH_TOKEN, ASOCIAL_X_CT0, ASOCIAL_YT_COOKIE.
 # Secrets are read with echo disabled and never printed.
 set -u
 
@@ -136,17 +138,21 @@ PLIST
 else ok "non-macOS — run redlib on demand; CLI auto-starts it"; fi
 
 echo "-- 7/7 credentials (.env — values stay in this file, never committed)"
+echo "   Unattended: export ASOCIAL_X_AUTH_TOKEN / ASOCIAL_X_CT0 / ASOCIAL_YT_COOKIE."
 echo "   X/Twitter cookies: browser DevTools → Application → Cookies → x.com → copy auth_token and ct0."
 if [ -n "$(env_get X_AUTH_TOKEN)" ] && [ -n "$(env_get X_CT0)" ] && [ "$RECONF" = 0 ]; then ok "X cookies already set";
 else
-  A="$(ask_secret 'X auth_token')"; C="$(ask_secret 'X ct0')"
+  A="${ASOCIAL_X_AUTH_TOKEN:-}"; C="${ASOCIAL_X_CT0:-}"
+  if [ -z "$A" ]; then A="$(ask_secret 'X auth_token')"; fi
+  if [ -z "$C" ]; then C="$(ask_secret 'X ct0')"; fi
   if [ -n "$A" ] && [ -n "$C" ]; then env_set X_AUTH_TOKEN "$A"; env_set X_CT0 "$C"; ok "X cookies saved to .env";
   else warn "X cookies skipped — x commands will fail until set (re-run with --reconfigure)"; fi
 fi
 echo "   YouTube cookie (optional): youtube.com DevTools → Cookies → copy the whole Cookie header. Enables age-restricted videos."
 if [ -n "$(env_get YT_COOKIE)" ] && [ "$RECONF" = 0 ]; then ok "YT cookie already set";
 else
-  Y="$(ask_secret 'YT Cookie header')"
+  Y="${ASOCIAL_YT_COOKIE:-}"
+  if [ -z "$Y" ]; then Y="$(ask_secret 'YT Cookie header')"; fi
   if [ -n "$Y" ]; then env_set YT_COOKIE "$Y"; ok "YT cookie saved (used by youtubei.js + yt-dlp frames)";
   else ok "YT cookie skipped (optional)"; fi
 fi
